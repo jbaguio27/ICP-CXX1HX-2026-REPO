@@ -2,6 +2,8 @@
 
 AWS-only data engineering project that processes JODI-Oil CSV files in Amazon S3 into Silver and Gold Parquet datasets, validates them with Athena, and runs a data quality report through EMR Serverless and Step Functions.
 
+<img width="2491" height="1165" alt="image" src="https://github.com/user-attachments/assets/a5eabb25-aff7-4872-91da-a01643bfa39a" />
+
 ## What this Repo Contains?
 
 - Weekly project deliverables from planning and environment setup through orchestration and final documentation (`Week1/` to `Week6/`).
@@ -313,21 +315,6 @@ aws stepfunctions start-execution `
   Evidence needed: `requirements.txt`, `pyproject.toml`, or another dependency file.
 - `Week6/README.md` references `Week6/architecture/README.md`, but that file is not present.
   Current evidence in repo: `Week6/architecture/architecture-diagram.png` exists; add the missing README or update the Week 6 document links.
-
-## Documentation and Images
-
-- `![Architecture placeholder](docs/images/architecture.png)`
-- Should show the AWS-only flow from S3 raw to Silver, Gold, Athena validation, and the data quality report.
-- Base it on `Week1/architecture.md`, `infra/statemachine.asl.json`, and the existing `Week6/architecture/architecture-diagram.png`.
-- `![Data model placeholder](docs/images/data_model_erd.png)`
-- Should show `silver_jodi_oil`, the four Gold tables, and their shared `year` and `month` partitions.
-- Base it on `Week4/docs/athena_ddl.sql`, `Week3/code/spark_to_silver.py`, and `Week4/code/spark_to_gold.py`.
-- `![Pipeline graph placeholder](docs/images/pipeline_graph.png)`
-- Should show the Step Functions task sequence from `RunSilverJob` through `RunDataQualityJob`.
-- Base it on `infra/statemachine.asl.json`.
-- `![Dashboard placeholder](docs/images/dashboard_01.png)`
-- The repo does not contain a dashboard yet, so this placeholder should initially show either Athena validation output or the Week 5 JSON report contents.
-- Replace it with a real dashboard screenshot only after dashboard code or reporting assets exist in the repo.
 
 ## Roadmap
 
