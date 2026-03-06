@@ -1,0 +1,27 @@
+aws_region = "ap-southeast-2"
+aws_profile = "YOUR_AWS_PROFILE"
+
+data_bucket          = "YOUR_DATA_BUCKET"
+athena_output_s3_uri = "s3://YOUR_DATA_BUCKET/athena-results/"
+
+glue_database   = "jodi_oil_db"
+athena_workgroup = "jodi-oil-wg"
+
+emr_application_id      = "YOUR_EMR_APPLICATION_ID"
+emr_runtime_role_arn    = "arn:aws:iam::YOUR_ACCOUNT_ID:role/jodi-oil-emr-runtime-role"
+step_functions_role_arn = "arn:aws:iam::YOUR_ACCOUNT_ID:role/jodi-oil-stepfunctions-role"
+
+state_machine_name           = "jodi-oil-pipeline"
+step_functions_log_group_name = "/aws/vendedlogs/states/jodi-oil-pipeline"
+log_retention_days           = 30
+
+spark_adaptive_enabled          = true
+spark_shuffle_partitions        = 200
+spark_target_files_per_partition = 1
+
+# Optional explicit overrides (leave empty to use defaults):
+# silver_script_s3_uri       = "s3://YOUR_DATA_BUCKET/jodi-oil/jobs/week3/spark_to_silver.py"
+# gold_script_s3_uri         = "s3://YOUR_DATA_BUCKET/jodi-oil/jobs/week4/spark_to_gold.py"
+# data_quality_script_s3_uri = "s3://YOUR_DATA_BUCKET/jodi-oil/jobs/week5/data_quality_spark.py"
+# config_s3_uri              = "s3://YOUR_DATA_BUCKET/jodi-oil/jobs/shared/config.yaml"
+# config_s3_uri              = "s3://YOUR_DATA_BUCKET/jodi-oil/jobs/week5/config.yaml"

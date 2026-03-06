@@ -1,0 +1,451 @@
+{
+  "Comment": "JODI Oil AWS-only orchestration: Silver -> Gold -> Athena DDL/repair/validation -> Data Quality",
+  "StartAt": "RunSilverJob",
+  "States": {
+    "RunSilverJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::emr-serverless:startJobRun.sync",
+      "Parameters": {
+        "ApplicationId": "${emr_application_id}",
+        "ExecutionRoleArn": "${emr_runtime_role_arn}",
+        "JobDriver": {
+          "SparkSubmit": {
+            "EntryPoint": "${silver_script_s3_uri}",
+            "EntryPointArguments": [
+              "--config",
+              "config.yaml"
+            ],
+            "SparkSubmitParameters": "${silver_spark_submit_parameters}"
+          }
+        },
+        "ConfigurationOverrides": {
+          "MonitoringConfiguration": {
+            "S3MonitoringConfiguration": {
+              "LogUri": "${emr_logs_s3_uri}"
+            }
+          }
+        }
+      },
+      "Next": "RunGoldJob",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "RunGoldJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::emr-serverless:startJobRun.sync",
+      "Parameters": {
+        "ApplicationId": "${emr_application_id}",
+        "ExecutionRoleArn": "${emr_runtime_role_arn}",
+        "JobDriver": {
+          "SparkSubmit": {
+            "EntryPoint": "${gold_script_s3_uri}",
+            "EntryPointArguments": [
+              "--config",
+              "config.yaml"
+            ],
+            "SparkSubmitParameters": "${gold_spark_submit_parameters}"
+          }
+        },
+        "ConfigurationOverrides": {
+          "MonitoringConfiguration": {
+            "S3MonitoringConfiguration": {
+              "LogUri": "${emr_logs_s3_uri}"
+            }
+          }
+        }
+      },
+      "Next": "AthenaCreateDatabase",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaCreateDatabase": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "CREATE DATABASE IF NOT EXISTS ${glue_database}",
+        "WorkGroup": "${athena_workgroup}",
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaCreateSilverTable",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaCreateSilverTable": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "CREATE EXTERNAL TABLE IF NOT EXISTS ${glue_database}.silver_jodi_oil (country string, area string, product string, flow string, unit string, value double, source_file_name string, ingested_at_utc timestamp) PARTITIONED BY (year int, month int) STORED AS PARQUET LOCATION '${silver_table_s3_location}'",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaCreateGoldMonthlyTable",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaCreateGoldMonthlyTable": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "CREATE EXTERNAL TABLE IF NOT EXISTS ${glue_database}.gold_monthly_global_production (metric_name string, total_production double) PARTITIONED BY (year int, month int) STORED AS PARQUET LOCATION '${gold_monthly_s3_location}'",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaCreateGoldCountryTable",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaCreateGoldCountryTable": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "CREATE EXTERNAL TABLE IF NOT EXISTS ${glue_database}.gold_country_production_trend (country string, production_value double) PARTITIONED BY (year int, month int) STORED AS PARQUET LOCATION '${gold_country_s3_location}'",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaCreateGoldTopTable",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaCreateGoldTopTable": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "CREATE EXTERNAL TABLE IF NOT EXISTS ${glue_database}.gold_top_producers_by_month (country string, production_value double, producer_rank int) PARTITIONED BY (year int, month int) STORED AS PARQUET LOCATION '${gold_top_s3_location}'",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaCreateGoldTradeTable",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaCreateGoldTradeTable": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "CREATE EXTERNAL TABLE IF NOT EXISTS ${glue_database}.gold_trade_balance_by_country (country string, imports_value double, exports_value double, trade_balance_value double) PARTITIONED BY (year int, month int) STORED AS PARQUET LOCATION '${gold_trade_s3_location}'",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaRepairSilver",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaRepairSilver": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "MSCK REPAIR TABLE ${glue_database}.silver_jodi_oil",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaRepairGoldMonthly",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaRepairGoldMonthly": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "MSCK REPAIR TABLE ${glue_database}.gold_monthly_global_production",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaRepairGoldCountry",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaRepairGoldCountry": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "MSCK REPAIR TABLE ${glue_database}.gold_country_production_trend",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaRepairGoldTop",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaRepairGoldTop": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "MSCK REPAIR TABLE ${glue_database}.gold_top_producers_by_month",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaRepairGoldTrade",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaRepairGoldTrade": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "MSCK REPAIR TABLE ${glue_database}.gold_trade_balance_by_country",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaValidationGlobalProduction",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaValidationGlobalProduction": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "SELECT year, month, metric_name, total_production FROM ${glue_database}.gold_monthly_global_production WHERE year = 2023 AND month = 6 ORDER BY year, month",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaValidationTopProducers",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaValidationTopProducers": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "SELECT year, month, country, production_value, producer_rank FROM ${glue_database}.gold_top_producers_by_month WHERE year = 2023 AND month = 6 ORDER BY producer_rank ASC",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "AthenaValidationTradeBalance",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "AthenaValidationTradeBalance": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::athena:startQueryExecution.sync",
+      "Parameters": {
+        "QueryString": "SELECT year, month, country, imports_value, exports_value, trade_balance_value FROM ${glue_database}.gold_trade_balance_by_country WHERE year = 2023 AND month = 6 ORDER BY ABS(trade_balance_value) DESC LIMIT 50",
+        "WorkGroup": "${athena_workgroup}",
+        "QueryExecutionContext": {
+          "Database": "${glue_database}"
+        },
+        "ResultConfiguration": {
+          "OutputLocation": "${athena_output_s3_uri}"
+        }
+      },
+      "Next": "RunDataQualityJob",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "RunDataQualityJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::emr-serverless:startJobRun.sync",
+      "Parameters": {
+        "ApplicationId": "${emr_application_id}",
+        "ExecutionRoleArn": "${emr_runtime_role_arn}",
+        "JobDriver": {
+          "SparkSubmit": {
+            "EntryPoint": "${data_quality_script_s3_uri}",
+            "EntryPointArguments": [
+              "--config",
+              "config.yaml"
+            ],
+            "SparkSubmitParameters": "${dq_spark_submit_parameters}"
+          }
+        },
+        "ConfigurationOverrides": {
+          "MonitoringConfiguration": {
+            "S3MonitoringConfiguration": {
+              "LogUri": "${emr_logs_s3_uri}"
+            }
+          }
+        }
+      },
+      "Next": "WorkflowSucceeded",
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "WorkflowFailed"
+        }
+      ]
+    },
+    "WorkflowSucceeded": {
+      "Type": "Succeed"
+    },
+    "WorkflowFailed": {
+      "Type": "Fail",
+      "Cause": "Pipeline failed. Review Step Functions execution details and service logs."
+    }
+  }
+}

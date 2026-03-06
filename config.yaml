@@ -1,0 +1,16 @@
+mode: aws
+dataset_name: ${DATASET_NAME}
+
+raw_uri: ${RAW_URI}
+silver_uri: ${SILVER_URI}
+gold_uri: ${GOLD_URI}
+
+aws:
+  region: ${AWS_REGION}
+  glue_database: ${GLUE_DATABASE}
+  athena_output_s3: ${ATHENA_OUTPUT_S3}
+
+spark:
+  adaptive_enabled: ${SPARK_ADAPTIVE_ENABLED}
+  shuffle_partitions: ${SPARK_SHUFFLE_PARTITIONS}
+  target_files_per_partition: ${SPARK_TARGET_FILES_PER_PARTITION}

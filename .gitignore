@@ -1,0 +1,17 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.log
+input_data/
+data_lake/
+Week4/output/
+Week5/output/
+infra/terraform/.terraform/
+infra/terraform/terraform.tfvars
+infra/terraform/*.tfvars
+infra/terraform/*.tfvars.json
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/*.tfplan
+infra/terraform/crash.log
